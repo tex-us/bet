@@ -2,28 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>TEXBet</title>
+  <title>TEXBet Pool</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>TEXBet - Sports Betting on Polygon</h1>
+  <h1>TEXBet Pool - Sports Betting on Polygon</h1>
 
-  <p>Enter the amount of MATIC to bet:</p>
-  <input type="number" id="betAmount" placeholder="0.01" step="0.01">
-  <br>
   <button id="connectWallet">Connect Wallet</button>
+  <p id="status">Wallet not connected</p>
+
+  <h3>Select Match and Bet</h3>
+  <label>League:</label>
+  <select id="leagueSelect">
+    <option value="NBA">NBA</option>
+    <option value="MLB">MLB</option>
+    <option value="NFL">NFL</option>
+    <option value="MLS">MLS</option>
+  </select>
+  <br>
+
+  <label>Match:</label>
+  <select id="matchSelect"></select>
+  <br>
+
+  <label>Outcome:</label>
+  <select id="outcomeSelect">
+    <option value="Team1Win">Team1 Win</option>
+    <option value="Team2Win">Team2 Win</option>
+    <option value="Draw">Draw</option>
+  </select>
+  <br>
+
+  <label>Amount (MATIC):</label>
+  <input type="number" id="betAmount" step="0.01" placeholder="0.01">
+  <br>
   <button id="placeBet">Place Bet</button>
 
-  <p id="status"></p>
+  <h3>Pool Info</h3>
+  <div id="poolInfo" class="pool-info"></div>
+
+  <h3>Your Bets</h3>
+  <table id="betsTable">
+    <thead>
+      <tr>
+        <th>Match</th>
+        <th>Outcome</th>
+        <th>Amount (MATIC)</th>
+        <th>Tx Hash</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script>
-    let web3;
-    let userAccount;
-    const backendWallet = "YOUR_TESTNET_WALLET_ADDRESS"; // Replace with your Polygon Mumbai wallet
+    const backendWallet = "YOUR_TESTNET_WALLET_ADDRESS"; // Replace with your wallet
+    let web3, userAccount;
 
-    // Connect MetaMask
-    document.getElementById('connectWallet').onclick = async () => {
+    // Sample matches per league
+    const matchesByLeague = {
+      NBA: ["Lakers vs Celtics", "Bulls vs Heat", "Warriors vs Nets"],
+      MLB: ["Yankees vs Red Sox", "Dodgers vs Giants", "Cubs vs Cardinals"],
+      NFL: ["Patriots vs Rams", "Cowboys vs Packers", "Chiefs vs Eagles"],
+      MLS: ["LAFC vs NYCFC", "Seattle vs Toronto", "DC United vs Inter Miami"]
+    };
+
+    const betsKey = "texBetPoolBets"; // localStorage key
+
+    // Load matches for selected league
+    const leagueSelect = document.getElementById("leagueSelect");
+    const matchSelect = document.getElementById("matchSelect");
+
+    function updateMatchOptions() {
+      const league = leagueSelect.value;
+      matchSelect.innerHTML = "";
+      matchesByLeague[league].forEach(match => {
+        const option = document.createElement("option");
+        option.value = match;
+        option.textContent = match;
+        matchSelect.appendChild(option);
+      });
+    }
+
+    leagueSelect.onchange = updateMatchOptions;
+    updateMatchOptions();
+
+    // Connect wallet
+    document.getElementById("connectWallet").onclick = async () => {
       if (window.ethereum) {
         web3 = new Web3(window.ethereum);
         try {
@@ -31,19 +96,28 @@
           const accounts = await web3.eth.getAccounts();
           userAccount = accounts[0];
           document.getElementById('status').innerText = "Connected: " + userAccount;
+          loadUserBets();
+          updatePoolInfo();
         } catch (err) {
           document.getElementById('status').innerText = "Connection failed: " + err.message;
         }
       } else {
-        alert("Please install MetaMask to use TEXBet!");
+        alert("Install MetaMask to use TEXBet!");
       }
     };
 
-    // Place Bet
-    document.getElementById('placeBet').onclick = async () => {
-      const amount = document.getElementById('betAmount').value;
-      if (!amount || !userAccount) {
-        alert("Enter a bet amount and connect your wallet.");
+    // Place bet
+    document.getElementById("placeBet").onclick = async () => {
+      if (!userAccount) {
+        alert("Connect your wallet first.");
+        return;
+      }
+
+      const match = matchSelect.value;
+      const outcome = document.getElementById("outcomeSelect").value;
+      const amount = document.getElementById("betAmount").value;
+      if (!amount || amount <= 0) {
+        alert("Enter a valid bet amount.");
         return;
       }
 
@@ -51,13 +125,61 @@
         const tx = await web3.eth.sendTransaction({
           from: userAccount,
           to: backendWallet,
-          value: web3.utils.toWei(amount, 'ether')
+          value: web3.utils.toWei(amount, "ether")
         });
-        document.getElementById('status').innerText = "Bet placed! Tx hash: " + tx.transactionHash;
+
+        const bet = { wallet: userAccount, match, outcome, amount, txHash: tx.transactionHash };
+        saveBet(bet);
+        loadUserBets();
+        updatePoolInfo();
+        document.getElementById("status").innerText = "Bet placed! Tx hash: " + tx.transactionHash;
       } catch (err) {
-        document.getElementById('status').innerText = "Transaction failed: " + err.message;
+        document.getElementById("status").innerText = "Transaction failed: " + err.message;
       }
     };
+
+    // LocalStorage functions
+    function saveBet(bet) {
+      const allBets = JSON.parse(localStorage.getItem(betsKey)) || [];
+      allBets.push(bet);
+      localStorage.setItem(betsKey, JSON.stringify(allBets));
+    }
+
+    function getAllBets() {
+      return JSON.parse(localStorage.getItem(betsKey)) || [];
+    }
+
+    function loadUserBets() {
+      const tbody = document.querySelector("#betsTable tbody");
+      tbody.innerHTML = "";
+      const allBets = getAllBets().filter(b => b.wallet === userAccount);
+      allBets.forEach(bet => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${bet.match}</td>
+          <td>${bet.outcome}</td>
+          <td>${bet.amount}</td>
+          <td>${bet.txHash}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function updatePoolInfo() {
+      const poolDiv = document.getElementById("poolInfo");
+      const allBets = getAllBets();
+      const poolByMatch = {};
+
+      allBets.forEach(bet => {
+        if (!poolByMatch[bet.match]) poolByMatch[bet.match] = 0;
+        poolByMatch[bet.match] += parseFloat(bet.amount);
+      });
+
+      poolDiv.innerHTML = Object.keys(poolByMatch).map(match => 
+        `${match}: ${poolByMatch[match].toFixed(2)} MATIC in pool`
+      ).join("<br>");
+    }
+
   </script>
 </body>
 </html>
