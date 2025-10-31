@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TEXBet</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>TEXBet - Sports Betting on Polygon</h1>
+
+  <p>Enter the amount of MATIC to bet:</p>
+  <input type="number" id="betAmount" placeholder="0.01" step="0.01">
+  <br>
+  <button id="connectWallet">Connect Wallet</button>
+  <button id="placeBet">Place Bet</button>
+
+  <p id="status"></p>
+
+  <script>
+    let web3;
+    let userAccount;
+    const backendWallet = "YOUR_TESTNET_WALLET_ADDRESS"; // Replace with your Polygon Mumbai wallet
+
+    // Connect MetaMask
+    document.getElementById('connectWallet').onclick = async () => {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        try {
+          await window.ethereum.request({ method: 'eth_requestAccounts' });
+          const accounts = await web3.eth.getAccounts();
+          userAccount = accounts[0];
+          document.getElementById('status').innerText = "Connected: " + userAccount;
+        } catch (err) {
+          document.getElementById('status').innerText = "Connection failed: " + err.message;
+        }
+      } else {
+        alert("Please install MetaMask to use TEXBet!");
+      }
+    };
+
+    // Place Bet
+    document.getElementById('placeBet').onclick = async () => {
+      const amount = document.getElementById('betAmount').value;
+      if (!amount || !userAccount) {
+        alert("Enter a bet amount and connect your wallet.");
+        return;
+      }
+
+      try {
+        const tx = await web3.eth.sendTransaction({
+          from: userAccount,
+          to: backendWallet,
+          value: web3.utils.toWei(amount, 'ether')
+        });
+        document.getElementById('status').innerText = "Bet placed! Tx hash: " + tx.transactionHash;
+      } catch (err) {
+        document.getElementById('status').innerText = "Transaction failed: " + err.message;
+      }
+    };
+  </script>
+</body>
+</html>
